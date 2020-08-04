@@ -23,45 +23,56 @@ app.post("/api/shorturl/new", (req, res) => {
   if (!is_url(inputURL)) {
     res.status(400).json({error: "Invalid URL format. Must begin with https:// or http://"});
   } else {
-    if (dns_check(inputURL, res) === false) {
-      res.status(502).json({error: "Invalid URL. DNS server didn't respond."});
-    } else {
-      // look up first in case it already exists
-      URL.findOne({url: inputURL})
-        .exec()
-        .then(doc => {
-          if (doc) {
-            console.log(doc);
-            res.status(200).json({short_url: doc.short_id, original_url: doc.url});    
-          } else { 
-            // insert into DB if it doesnt already exist
-            URL.countDocuments() // get a small unique id to use for the url (works only if we never delete docs)
-              .then(number => {
-                const url = new URL({
-                  url: inputURL,
-                  short_id: number + 1
-                });
-                url.save()
-                  .then(result => {
-                    console.log(result);
-                    res.status(200).json({short_url: result.short_id, original_url: result.url});    
+    const domain = parseDomain(inputURL);
+    if (domain === false) { res.status(400).json({error: "Invalid URL format. Must begin with https:// or http://"}); }
+    
+    lookupDomain(domain)
+      .then(result => {
+        console.log(result);
+        if (result.address == undefined) {
+          res.status(502).json({error: "Invalid URL. DNS could not locate address."});  
+        } else {
+          // look up first in case it already exists
+          URL.findOne({url: inputURL})
+            .exec()
+            .then(doc => {
+              if (doc) {
+                console.log(doc);
+                res.status(200).json({short_url: doc.short_id, original_url: doc.url});    
+              } else { 
+                // insert into DB if it doesnt already exist
+                URL.countDocuments() // get a small unique id to use for the url (works only if we never delete docs)
+                  .then(number => {
+                    const url = new URL({
+                      url: inputURL,
+                      short_id: number + 1
+                    });
+                    url.save()
+                      .then(result => {
+                        console.log(result);
+                        res.status(200).json({short_url: result.short_id, original_url: result.url});    
+                      })
+                      .catch(err => {
+                        console.log(err);
+                        res.status(500).json({error: err});
+                    });
                   })
                   .catch(err => {
                     console.log(err);
-                    res.status(500).json({error: err});
-                });
+                    res.status(500).json({error: "Failed to generate short link. Please try again.", errorDescription: err});
+                  });
+                }  
               })
-              .catch(err => {
-                console.log(err);
-                res.status(500).json({error: "Failed to generate short link. Please try again.", errorDescription: err});
-              });
-            }  
-          })
-        .catch(err => {
-          console.log(err);
-          res.status(500).json({error: "Failed to generate short link. Please try again.", errorDescription: err});
-        });
-    } 
+            .catch(err => {
+              console.log(err);
+              res.status(500).json({error: "Failed to generate short link. Please try again.", errorDescription: err});
+            });
+        }
+      })
+      .catch(err => { // dns lookup returned an error
+        console.log(err);
+        res.status(502).json({error: "Invalid URL. DNS server didn't respond."});  
+      });
   }
 });
 
@@ -113,8 +124,46 @@ function is_url(str) {
         }
 };
 
-function dns_check(url, res) {
-  // validate that URL is correct and points to real site
+// function dns_check(url) {
+//   // validate that URL is correct and points to real site
+//   let host = url;
+  
+//   //get the http(s)://and remove it
+//   var regex = /^https?:\/\//i; 
+//   let httpMatch = url.match(regex);
+//   if (httpMatch != null) {
+//     host = host.slice(httpMatch[0].length, host.length);  
+//   } else {
+//     return false; 
+//   }
+//   console.log(host);
+//   // locate the last slash so we can remove path after it
+//   regex = /\//; 
+//   let slashIndex = host.match(regex);
+//   if (slashIndex != null) {
+//     host = host.slice(0, slashIndex[1]); 
+//   }
+  
+//   // run dns lookup
+//   return dns.lookup(host, (err, address, family) => {
+//     console.log('address: %j family: IPv%s', address, family);
+//     if (err) {
+//       console.log('err');
+//       return false;
+//     } else if (address == undefined) {
+//       console.log('false');
+//       return false;
+//     } else {
+//       console.log('true');
+//       return true;
+//     }
+//     console.log('issue here')
+//   });
+// }
+
+
+function parseDomain(url) {
+    // validate that URL is correct and points to real site
   let host = url;
   
   //get the http(s)://and remove it
@@ -125,22 +174,26 @@ function dns_check(url, res) {
   } else {
     return false; 
   }
-  
+  console.log(host);
   // locate the last slash so we can remove path after it
   regex = /\//; 
   let slashIndex = host.match(regex);
   if (slashIndex != null) {
     host = host.slice(0, slashIndex[1]); 
   }
-  
-  // run dns lookup
-  let dnsResult = dns.lookup(host, (err, address, family) => {
-    // console.log('address: %j family: IPv%s', address, family);
-    if (err || address === undefined) {
-      return false;
-    } else {
-      return true;
-    }
-  });
+  return host
 }
+
+function lookupDomain(domain) {
+  return new Promise((resolve, reject) => {
+    dns.lookup(domain, (err, address, family) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ address, family })
+      }
+    })
+  })
+}
+
 

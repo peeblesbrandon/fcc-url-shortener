@@ -124,44 +124,6 @@ function is_url(str) {
         }
 };
 
-// function dns_check(url) {
-//   // validate that URL is correct and points to real site
-//   let host = url;
-  
-//   //get the http(s)://and remove it
-//   var regex = /^https?:\/\//i; 
-//   let httpMatch = url.match(regex);
-//   if (httpMatch != null) {
-//     host = host.slice(httpMatch[0].length, host.length);  
-//   } else {
-//     return false; 
-//   }
-//   console.log(host);
-//   // locate the last slash so we can remove path after it
-//   regex = /\//; 
-//   let slashIndex = host.match(regex);
-//   if (slashIndex != null) {
-//     host = host.slice(0, slashIndex[1]); 
-//   }
-  
-//   // run dns lookup
-//   return dns.lookup(host, (err, address, family) => {
-//     console.log('address: %j family: IPv%s', address, family);
-//     if (err) {
-//       console.log('err');
-//       return false;
-//     } else if (address == undefined) {
-//       console.log('false');
-//       return false;
-//     } else {
-//       console.log('true');
-//       return true;
-//     }
-//     console.log('issue here')
-//   });
-// }
-
-
 function parseDomain(url) {
     // validate that URL is correct and points to real site
   let host = url;
